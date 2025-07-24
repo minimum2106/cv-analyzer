@@ -30,7 +30,7 @@ class OpenAIService(LLMService):
     def call_api(self, prompt: str, system_prompt: str = None) -> str:
         response = self.client.responses.create(
             model=self.model,
-            instructions=None,
+            instructions=system_prompt,
             input=prompt,
         )
 
