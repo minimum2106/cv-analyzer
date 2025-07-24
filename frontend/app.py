@@ -65,38 +65,6 @@ def main():
     if 'cv_imgs' not in st.session.state:
         st.session_state.cv_imgs = []
 
-
-    # Sidebar
-    with st.sidebar:
-        st.title("🤖 AI Settings")
-
-        # Model selection
-        st.subheader("Select LLM Model")
-        model_type = st.selectbox(
-            "Choose your AI model:",
-            ["OpenAI", "Claude", "Groq"],
-            help="Select which AI model to use for analysis",
-        )
-
-        # Temperature slider
-        st.subheader("Model Parameters")
-        temperature = st.slider(
-            "Temperature",
-            min_value=0.0,
-            max_value=2.0,
-            value=0.7,
-            step=0.1,
-            help="Controls randomness: 0.0 = focused, 2.0 = creative",
-        )
-
-        # Model info
-        st.info(f"**Selected Model:** {model_type}\n**Temperature:** {temperature}")
-
-        # Sidebar collapse button
-        if st.button("🔄 Toggle Sidebar"):
-            st.session_state.sidebar_collapsed = not st.session_state.sidebar_collapsed
-            st.rerun()
-
     # Main content
     st.title("📄 CV/Resume Analyzer")
     st.markdown(
@@ -166,7 +134,6 @@ def main():
             "⚠️ Please upload a PDF file AND add additional information to enable analysis."
         )
 
-    # Perform analysis
     if analyze_button and uploaded_cv and user_text:
         st.subheader("🎯 AI Analysis Results")
 
