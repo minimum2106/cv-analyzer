@@ -1,5 +1,5 @@
 from general import LLMService
-import claude
+import anthropic
 import logging
 import os
 
