@@ -137,7 +137,7 @@ def main():
     if analyze_button and uploaded_cv and user_text:
         st.subheader("🎯 AI Analysis Results")
 
-        with st.spinner(f"Analyzing with {model_type}... This may take a moment."):
+        with st.spinner(f"Analyzing with {DEFAULT_LLM_SERVICE}... This may take a moment."):
             doc = fitz.open(stream=uploaded_cv.read(), filetype="pdf")
             merged_lines = requests.post(
                 f"{BACKEND_URL}/extract_cv_text",
