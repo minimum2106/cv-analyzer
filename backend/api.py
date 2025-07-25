@@ -3,16 +3,20 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pymupdf
 from pymupdf import Document
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator, PlainSerializer
 import openai
 import numpy as np
 import os
 from backend.services import OpenAIService, GroqService, ClaudeService
-from typing import List
+from typing import List, Annotated
+import ast
 
 
 from backend.embeddings import get_openai_embeddings
-from backend.prompts import similarity_reasoning_prompt, job_requirement_extracting_prompt
+from backend.prompts import (
+    similarity_reasoning_prompt,
+    job_requirement_extracting_prompt,
+)
 from backend.extract_doc import (
     get_lines_with_coords,
     get_bullets_from_doc,
@@ -67,12 +71,34 @@ class SimilarityMatrixRequest(BaseModel):
     job_lines: List[str]
 
 
+def nd_array_before_validator(x):
+    # custom before validation logic
+    if isinstance(x, str):
+        x_list = ast.literal_eval(x)
+        x = np.array(x_list)
+    if isinstance(x, List):
+        x = np.array(x)
+    return x
+
+
+def nd_array_serializer(x):
+    # custom serialization logic
+    return x.tolist()
+    # return np.array2string(x,separator=',', threshold=sys.maxsize)
+
+
+MyNumPyArray = Annotated[
+    np.ndarray,
+    BeforeValidator(nd_array_before_validator),
+    PlainSerializer(nd_array_serializer, return_type=List),
+]
+
+
 class SimilarityMatrixResponse(BaseModel):
-    matrix: np.ndarray
+    matrix: MyNumPyArray
 
     class Config:
         arbitrary_types_allowed = True
-
 
 
 class MatchItem(BaseModel):
@@ -105,10 +131,10 @@ async def extract_cv_text(request: CVTextRequest):
 async def extract_job_lines(request: JobLinesRequest):
     llm_service = MODELS.get(request.model_type)
     if not llm_service:
-        raise ValueError(f"Unsupported model type: {request.model_type}")    
+        raise ValueError(f"Unsupported model type: {request.model_type}")
 
     job_requirements = llm_service.call_api(
-        system_prompt= job_requirement_extracting_prompt(request.job_description)
+        system_prompt=job_requirement_extracting_prompt(request.job_description)
     )
 
     doc = pymupdf.open()
@@ -148,14 +174,14 @@ async def get_similarity_matrix(request: SimilarityMatrixRequest):
 async def explain_match(request: ExplainMatchRequest):
     llm_service = MODELS.get(request.model_type)
     if not llm_service:
-        raise ValueError(f"Unsupported model type: {request.model_type}")    
+        raise ValueError(f"Unsupported model type: {request.model_type}")
 
     explainations = []
     for indice in request.filtered_indices:
         cv_index, job_index = indice
         if cv_index >= len(request.cv_lines) or job_index >= len(request.job_lines):
             raise ValueError("Index out of bounds for CV or Job lines")
-        
+
         cv_line = request.cv_lines[cv_index]
         job_line = request.job_lines[job_index]
 
@@ -164,5 +190,5 @@ async def explain_match(request: ExplainMatchRequest):
         )
         explaination = explaination.strip()
         explainations.append(explaination)
-    
+
     return JSONResponse(content={"explanations": explainations})
