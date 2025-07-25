@@ -4,7 +4,7 @@ from typing import Tuple, List, Optional
 class JobReqInfo(BaseModel):
     position: Tuple[float, float, float, float]
     text: str
-    explanation: str
+    explanation: Optional[str] = None
     
 
 class CVLineInfo(BaseModel):

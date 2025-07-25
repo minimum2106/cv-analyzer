@@ -1,8 +1,12 @@
+from cv2 import IMREAD_COLOR, imdecode
 import streamlit as st
 import numpy as np
 import fitz
 import requests
+
 from streamlit_image_coordinates import streamlit_image_coordinates
+from schemas import JobReqInfo, CVLineInfo
+from utils import duplicate_fitz_page
 
 
 DEFAULT_LLM_SERVICE = "openai"  # Default LLM service
@@ -19,57 +23,92 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-valid_coords = []
-CV_IMAGES = []
-
-def duplicate_fitz_page(page):
-    """
-    Create a duplicate of a PyMuPDF page object.
-    Returns a new page object with the same content.
-    """
-    # Export the page as a PDF bytes
-    pdf_bytes = page.parent.write([page.number])
-    # Open a new document from the single-page PDF
-    new_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    # Return the first (and only) page of the new document
-    return new_doc.load_page(0)
-
 
 def handle_cv_click():
     coords = st.session_state["cv_click_pos"]
-    for valid_coord in valid_coords:
+    for line_info in st.session_state.cv_line_info:
         if (
-            valid_coord["x1"] <= coords["x"] <= valid_coord["x2"]
-            and valid_coord["y1"] <= coords["y"] <= valid_coord["y2"]
+            line_info.position[0] <= coords["x"] <= line_info.position[2]
+            and line_info.position[1] <= coords["y"] <= line_info.position[3]
         ):
-            st.write(f"Clicked on: {valid_coord['text']}")
-            page = duplicate_fitz_page(CV_IMAGES[0])
-            page.add_rect_annot(
-                    valid_coord
-            )  # Add annotation to the first block
-            st.session_state.cv_idx += 1
-            if st.session_state.cv_idx >= len(CV_IMAGES):
-                st.session_state.cv_idx = 0
+            st.write(f"Clicked on: {line_info.text}")
+            st.write(line_info.position)
+            st.write(coords)
+
+            # Update The CV Image
+            page = duplicate_fitz_page(st.session_state.cv_org)
+            page.add_rect_annot(line_info.position)  # Add annotation to the first block
+            pix = page.get_pixmap(dpi=120).tobytes()
+            cv2_image = imdecode(
+                np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
+            )
+
+            st.session_state.cv_highlighted[0] = cv2_image
+
+            # Update The Job Description Image
+            job_page = duplicate_fitz_page(st.session_state.job_org)
+            st.session_state.highlighed_job_reqs = []
+            for job_req in line_info.connected_job_reqs:
+                job_page.add_rect_annot(
+                    job_req.position
+                )  # Add annotation to the first block
+                st.session_state.highlighed_job_reqs.append(job_req)
+
+            job_pix = job_page.get_pixmap(dpi=120).tobytes()
+            job_image = imdecode(
+                np.frombuffer(bytearray(job_pix), dtype=np.uint8), IMREAD_COLOR
+            )
+            st.session_state.job_highlighted[0] = job_image
 
             return
 
 
+def handle_job_on_click():
+    coords = st.session_state["job_hover_pos"]
+    for job_req in st.session_state.highlighed_job_reqs:
+        if (
+            job_req.position[0] <= coords["x"] <= job_req.position[2]
+            and job_req.position[1] <= coords["y"] <= job_req.position[3]
+        ):
+            # show explanation
+            # generate_explanation_on_hover(coords, job_req)
+            pass
+
+
+def generate_cv_line_info(filtered_indices, explanations):
+    for idx, (cv_idx, job_idx) in enumerate(filtered_indices):
+        cv_info = st.session_state.cv_line_info[cv_idx]
+        job_info = st.session_state.job_line_info[job_idx]
+
+        job_info.explanation = explanations[idx]
+        cv_info.connected_job_reqs.append(job_info)
+
+
 def main():
-    # Initialize session state
-    if "sidebar_collapsed" not in st.session_state:
-        st.session_state.sidebar_collapsed = False
-
-    if 'cv_idx' not in st.session_state:
-        st.session_state.cv_idx = 0
-
-    if 'cv_imgs' not in st.session.state:
-        st.session_state.cv_imgs = []
-
     # Main content
     st.title("📄 CV/Resume Analyzer")
     st.markdown(
         "Upload your CV/Resume and add additional information for AI-powered analysis."
     )
+
+    # Initialize session state
+    if "cv_org" not in st.session_state:
+        st.session_state.cv_org = None
+
+    if "cv_highlighted" not in st.session_state:
+        st.session_state.cv_highlighted = []
+
+    if "cv_line_info" not in st.session_state:
+        st.session_state.cv_line_info = []
+
+    if "job_org" not in st.session_state:
+        st.session_state.job_org = None
+
+    if "job_highlighted" not in st.session_state:
+        st.session_state.job_highlighted = []
+
+    if "highlighed_job_reqs" not in st.session_state:
+        st.session_state.highlighed_job_reqs = []
 
     # Create two columns for the main content
     col1, col2 = st.columns(2)
@@ -83,23 +122,21 @@ def main():
 
         if uploaded_cv is not None:
             with fitz.open(stream=uploaded_cv.getvalue()) as doc:
-                page_number = st.sidebar.number_input(
-                    "Page number",
-                    min_value=1,
-                    max_value=doc.page_count,
-                    value=1,
-                    step=1,
-                )
-                page = doc.load_page(page_number - 1)
+                page = doc.load_page(0)
                 pix = page.get_pixmap(dpi=120).tobytes()
-                # CV_IMAGES.append(pix)
-                # _ = streamlit_image_coordinates(
-                #     CV_IMAGES[st.session_state.cv_idx],
-                #     key="cv_click_pos",
-                #     use_column_width=True,
-                #     on_click=handle_cv_click,
-                # )
-                st.image(pix, use_container_width=True)
+                cv2_image = imdecode(
+                    np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
+                )
+
+                st.session_state.cv_org = duplicate_fitz_page(page)
+                st.session_state.cv_highlighted.append(cv2_image)
+
+                _ = streamlit_image_coordinates(
+                    st.session_state.cv_highlighted[0],
+                    key="cv_click_pos",
+                    use_column_width=True,
+                    on_click=handle_cv_click,
+                )
 
     # Right column - Text Input
     with col2:
@@ -137,23 +174,41 @@ def main():
     if analyze_button and uploaded_cv and user_text:
         st.subheader("🎯 AI Analysis Results")
 
-        with st.spinner(f"Analyzing with {DEFAULT_LLM_SERVICE}... This may take a moment."):
-            doc = fitz.open(stream=uploaded_cv.read(), filetype="pdf")
+        with st.spinner(
+            f"Analyzing with {DEFAULT_LLM_SERVICE}... This may take a moment."
+        ):
+            doc = fitz.open(stream=uploaded_cv.getvalue(), filetype="pdf")
             merged_lines = requests.post(
                 f"{BACKEND_URL}/extract_cv_text",
                 json={"doc": doc},
             )
+
+            for line in merged_lines:
+                st.session_state.cv_line_info.append(
+                    CVLineInfo(
+                        position=line.bbox,
+                        text=line.text,
+                    )
+                )
 
             job_merged_lines = requests.post(
                 f"{BACKEND_URL}/extract_job_lines",
                 json={"job_description": user_text, "model_type": DEFAULT_LLM_SERVICE},
             )
 
+            for line in merged_lines:
+                st.session_state.job_req_info.append(
+                    JobReqInfo(
+                        position=line.bbox,
+                        text=line.text,
+                    )
+                )
+
             similarity_matrix = requests.post(
                 f"{BACKEND_URL}/get_similarity_matrix",
                 json={
-                    "cv_lines": merged_lines.json()["lines"],
-                    "job_lines": job_merged_lines.json()["job_lines"],
+                    "cv_lines": [line.text for line in merged_lines],
+                    "job_lines": [line.text for line in job_merged_lines],
                 },
             )
 
@@ -168,7 +223,10 @@ def main():
                 },
             )
             explanations = response.json()["explanations"]
-            
+
+            # add connections between cv line and job requirements
+            generate_cv_line_info(filtered_indices, explanations)
+
     # Footer
     st.markdown("---")
     st.markdown(
