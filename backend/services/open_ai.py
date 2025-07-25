@@ -1,4 +1,4 @@
-from general import LLMService
+from backend.services.general import LLMService
 from openai import OpenAI
 import tiktoken
 import logging

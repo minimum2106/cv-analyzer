@@ -1,4 +1,4 @@
-from general import LLMService
+from backend.services.general import LLMService
 import anthropic
 import logging
 import os

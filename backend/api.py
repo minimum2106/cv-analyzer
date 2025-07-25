@@ -7,12 +7,13 @@ from pydantic import BaseModel
 import openai
 import numpy as np
 import os
-from services import OpenAIService, GroqService, ClaudeService
+from backend.services import OpenAIService, GroqService, ClaudeService
+from typing import List
 
 
-from embeddings import get_openai_embeddings
-from prompts import similarity_reasoning_prompt, extract_job_requirements_prompt
-from extract_doc import (
+from backend.embeddings import get_openai_embeddings
+from backend.prompts import similarity_reasoning_prompt, job_requirement_extracting_prompt
+from backend.extract_doc import (
     get_lines_with_coords,
     get_bullets_from_doc,
     merge_lines_by_bullets,
@@ -44,6 +45,9 @@ class CVTextRequest(BaseModel):
     model_type: str
     doc: Document
 
+    class Config:
+        arbitrary_types_allowed = True
+
 
 class CVTextResponse(BaseModel):
     cv_lines: list[LineWithCoords]
@@ -55,16 +59,20 @@ class JobLinesRequest(BaseModel):
 
 
 class JobLinesResponse(BaseModel):
-    job_lines: list[LineWithCoords]
+    job_lines: List[LineWithCoords]
 
 
 class SimilarityMatrixRequest(BaseModel):
-    cv_lines: list[str]
-    job_lines: list[str]
+    cv_lines: List[str]
+    job_lines: List[str]
 
 
 class SimilarityMatrixResponse(BaseModel):
     matrix: np.ndarray
+
+    class Config:
+        arbitrary_types_allowed = True
+
 
 
 class MatchItem(BaseModel):
@@ -75,9 +83,9 @@ class MatchItem(BaseModel):
 
 class ExplainMatchRequest(BaseModel):
     model_type: str
-    cv_lines: list[str]
-    job_lines: list[str]
-    filtered_indices: list[list[int]]  # List of [cv_index, job_index]
+    cv_lines: List[str]
+    job_lines: List[str]
+    filtered_indices: List[List[int]]  # List of [cv_index, job_index]
 
 
 class ExplainMatchResponse(BaseModel):
@@ -100,7 +108,7 @@ async def extract_job_lines(request: JobLinesRequest):
         raise ValueError(f"Unsupported model type: {request.model_type}")    
 
     job_requirements = llm_service.call_api(
-        system_prompt= extract_job_requirements_prompt(request.job_description)
+        system_prompt= job_requirement_extracting_prompt(request.job_description)
     )
 
     doc = pymupdf.open()

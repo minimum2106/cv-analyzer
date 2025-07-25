@@ -1,4 +1,4 @@
-from general import LLMService
-from open_ai import OpenAIService
+from backend.services.general import LLMService
+from backend.services.open_ai import OpenAIService
 from backend.services.groq_ import GroqService
-from claude import ClaudeService
+from backend.services.claude import ClaudeService
