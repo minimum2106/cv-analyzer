@@ -70,7 +70,7 @@ class SimilarityMatrixRequest(BaseModel):
     cv_lines: List[str]
     job_lines: List[str]
 
-
+# https://www.flowphysics.com/2024/02/12/numpy-arrays-in-pydantic.html
 def nd_array_before_validator(x):
     # custom before validation logic
     if isinstance(x, str):
