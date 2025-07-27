@@ -45,7 +45,7 @@ MODELS = {
 # Pydantic models for request/response
 
 
-class CVTextRequest(BaseModel):
+class PDFTextRequest(BaseModel):
     model_type: str
     doc: Document
 
@@ -53,8 +53,8 @@ class CVTextRequest(BaseModel):
         arbitrary_types_allowed = True
 
 
-class CVTextResponse(BaseModel):
-    cv_lines: list[LineWithCoords]
+class PDFTextResponse(BaseModel):
+    lines: list[LineWithCoords]
 
 
 class JobLinesRequest(BaseModel):
@@ -63,7 +63,7 @@ class JobLinesRequest(BaseModel):
 
 
 class JobLinesResponse(BaseModel):
-    job_lines: List[LineWithCoords]
+    job_lines: str
 
 
 class SimilarityMatrixRequest(BaseModel):
@@ -118,38 +118,25 @@ class ExplainMatchResponse(BaseModel):
     explanation: str
 
 
-@app.post("/extract_cv_text", response_model=CVTextResponse)
-async def extract_cv_text(request: CVTextRequest):
+@app.post("/extract_text", response_model=PDFTextResponse)
+async def extract_cv_text(request: PDFTextRequest):
     lines_with_coords, fontsize = get_lines_with_coords(request.doc)
     bullets = get_bullets_from_doc(request.doc, fontsize)
     merged_lines = merge_lines_by_bullets(lines_with_coords, bullets)
 
-    return CVTextResponse(cv_lines=merged_lines)
+    return PDFTextResponse(cv_lines=merged_lines)
 
-
-@app.post("/extract_job_lines", response_model=JobLinesResponse)
-async def extract_job_lines(request: JobLinesRequest):
+@app.post("/generate_job_lines", response_model=JobLinesResponse)
+async def generate_job_lines(request: JobLinesRequest):
     llm_service = MODELS.get(request.model_type)
     if not llm_service:
         raise ValueError(f"Unsupported model type: {request.model_type}")
 
-    job_requirements = llm_service.call_api(
+    job_lines = llm_service.call_api(
         system_prompt=job_requirement_extracting_prompt(request.job_description)
     )
 
-    doc = pymupdf.open()
-    doc.new_page()
-    page = doc[0]
-    page.insert_text((50, 50), job_requirements, fontsize=12)
-
-    # like before, extract lines and coordinates
-    job_lines_with_coords, job_fontsize = get_lines_with_coords(doc)
-    job_bullets = get_bullets_from_doc(doc, job_fontsize)
-
-    # Merge lines with coordinates
-    job_merged_lines = merge_lines_by_bullets(job_lines_with_coords, job_bullets)
-
-    return JobLinesResponse(job_lines=job_merged_lines)
+    return JobLinesResponse(job_lines=job_lines)
 
 
 @app.post("/get_similarity_matrix", response_model=SimilarityMatrixResponse)
