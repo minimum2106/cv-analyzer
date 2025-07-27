@@ -1,9 +1,9 @@
-from cv2 import IMREAD_COLOR, imdecode
 import streamlit as st
 import numpy as np
 import fitz
 import requests
 
+from cv2 import IMREAD_COLOR, imdecode
 from streamlit_image_coordinates import streamlit_image_coordinates
 from schemas import JobReqInfo, CVLineInfo
 from utils import duplicate_fitz_page
@@ -26,14 +26,22 @@ st.set_page_config(
 
 def handle_cv_click():
     coords = st.session_state["cv_click_pos"]
+
+    def map_line_pos_to_img(pos):
+        return (
+            pos[0] / st.session_state.page_width * coords["width"],
+            pos[1] / st.session_state.page_height * coords["height"],
+            pos[2] / st.session_state.page_width * coords["width"],
+            pos[3] / st.session_state.page_height * coords["height"],
+        )
+
     for line_info in st.session_state.cv_line_info:
+        mapped_line_coords = map_line_pos_to_img(line_info.position)
+
         if (
-            line_info.position[0] <= coords["x"] <= line_info.position[2]
-            and line_info.position[1] <= coords["y"] <= line_info.position[3]
+            mapped_line_coords[0] <= coords["x"] <= mapped_line_coords[2]
+            and mapped_line_coords[1] <= coords["y"] <= mapped_line_coords[3]
         ):
-            st.write(f"Clicked on: {line_info.text}")
-            st.write(line_info.position)
-            st.write(coords)
 
             # Update The CV Image
             page = duplicate_fitz_page(st.session_state.cv_org)
@@ -110,6 +118,12 @@ def main():
     if "highlighed_job_reqs" not in st.session_state:
         st.session_state.highlighed_job_reqs = []
 
+    if "page_width" not in st.session_state:
+        st.session_state.page_width = None
+
+    if "page_height" not in st.session_state:
+        st.session_state.page_height = None
+
     # Create two columns for the main content
     col1, col2 = st.columns(2)
 
@@ -123,6 +137,10 @@ def main():
         if uploaded_cv is not None:
             with fitz.open(stream=uploaded_cv.getvalue()) as doc:
                 page = doc.load_page(0)
+
+                st.session_state.page_width = page.mediabox.width
+                st.session_state.page_height = page.mediabox.height
+
                 pix = page.get_pixmap(dpi=120).tobytes()
                 cv2_image = imdecode(
                     np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
@@ -151,6 +169,31 @@ def main():
         # Character count
         if user_text:
             st.caption(f"Characters: {len(user_text)}")
+
+            # extract text
+            st.session_state.job_org = fitz.open()
+            page = st.session_state.job_org.new_page()
+            page.insert_text((50, 50), user_text, fontsize=12)
+            pix = page.get_pixmap(dpi=120).tobytes()
+            job_image = imdecode(
+                np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
+            )
+
+            # summarize and get job requirements by LLM
+            st.session_state.job_highlighted.append(job_image)
+
+            # create a pdf doc of job reqs
+            job_page = duplicate_fitz_page(page)
+            st.session_state.job_org.insert_page(0, job_page)  # Insert at the beginning
+            st.session_state.job_org.save("job_description.pdf")
+
+            # show doc as image
+            _ = streamlit_image_coordinates(
+                st.session_state.job_highlighted[0],
+                key="job_hover_pos",
+                use_column_width=True,
+                on_click=handle_job_on_click,
+            )
 
     # Analysis section
     st.markdown("---")
