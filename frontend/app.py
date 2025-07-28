@@ -225,14 +225,14 @@ def main():
                 use_column_width=True,
                 on_click=handle_job_on_click,
             )
-            
+
             holder.empty()  # Clear the placeholder after text input
 
     # Analysis section
     st.markdown("---")
 
     # Analysis button
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    _, col_btn2, _ = st.columns([1, 2, 1])
     with col_btn2:
         analyze_button = st.button(
             "🔍 Analyze CV/Resume",
