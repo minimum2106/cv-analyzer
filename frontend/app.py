@@ -146,7 +146,8 @@ def main():
     # Left column - PDF Upload
     with col1:
         st.subheader("📁 Upload PDF")
-        uploaded_cv = st.file_uploader(
+        holder = st.empty()  # Placeholder for the file uploader
+        uploaded_cv = holder.file_uploader(
             "Choose a PDF file", type="pdf", help="Upload your CV/Resume in PDF format"
         )
 
@@ -172,10 +173,13 @@ def main():
                     on_click=handle_cv_click,
                 )
 
+                holder.empty()  # Clear the placeholder after upload
+
     # Right column - Text Input
     with col2:
         st.subheader("✏️ Additional Information")
-        user_text = st.text_area(
+        holder = st.empty()  # Placeholder for the text area
+        user_text = holder.text_area(
             "Add any additional information:",
             placeholder="Enter job descriptions, specific requirements, career goals, or any other relevant information...",
             height=300,
@@ -221,6 +225,8 @@ def main():
                 use_column_width=True,
                 on_click=handle_job_on_click,
             )
+            
+            holder.empty()  # Clear the placeholder after text input
 
     # Analysis section
     st.markdown("---")
