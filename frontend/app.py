@@ -8,7 +8,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 from schemas import JobReqInfo, CVLineInfo
 from utils import duplicate_fitz_page
 
-
+JOB_DOC_MARGIN = 10  # Margin for job description PDF
 DEFAULT_LLM_SERVICE = "openai"  # Default LLM service
 THRESHOLD = 0.7  # You may want to tune this
 BACKEND_URL = (
@@ -195,7 +195,13 @@ def main():
             doc = fitz.open()
             doc.new_page()
             page = doc[0]
-            page.insert_text((50, 50), job_requirements, fontsize=12)
+            rect = fitz.Rect(
+                JOB_DOC_MARGIN,
+                JOB_DOC_MARGIN,
+                page.rect.width - JOB_DOC_MARGIN,
+                page.rect.height - JOB_DOC_MARGIN
+            )
+            page.insert_textbox(rect, user_text, fontsize=12)
 
             pix = page.get_pixmap(dpi=120).tobytes()
             job_image = imdecode(
