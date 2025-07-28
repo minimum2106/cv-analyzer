@@ -201,7 +201,7 @@ def main():
                 page.rect.width - JOB_DOC_MARGIN,
                 page.rect.height - JOB_DOC_MARGIN
             )
-            page.insert_textbox(rect, user_text, fontsize=12)
+            page.insert_textbox(rect, job_requirements, fontsize=12)
 
             pix = page.get_pixmap(dpi=120).tobytes()
             job_image = imdecode(
