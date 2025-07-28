@@ -14,8 +14,8 @@ import ast
 
 from backend.embeddings import get_openai_embeddings
 from backend.prompts import (
-    similarity_reasoning_prompt,
-    job_requirement_extracting_prompt,
+    SIMILARITY_REASONING_PROMPT,
+    JOB_REQUIREMENT_EXTRACTING_PROMPT,
 )
 from backend.extract_doc import (
     get_lines_with_coords,
@@ -133,7 +133,8 @@ async def generate_job_lines(request: JobLinesRequest):
         raise ValueError(f"Unsupported model type: {request.model_type}")
 
     job_lines = llm_service.call_api(
-        system_prompt=job_requirement_extracting_prompt(request.job_description)
+        system_prompt= JOB_REQUIREMENT_EXTRACTING_PROMPT,
+        prompt="This is the job description: \n" + request.job_description,
     )
 
     return JobLinesResponse(job_lines=job_lines)
@@ -173,7 +174,13 @@ async def explain_match(request: ExplainMatchRequest):
         job_line = request.job_lines[job_index]
 
         explaination = llm_service.call_api(
-            system_prompt=similarity_reasoning_prompt(cv_line, job_line)
+            system_prompt=SIMILARITY_REASONING_PROMPT,
+            prompt=f"""
+                Explain the similarity between the following CV line and Job line:
+                CV Line: {cv_line}
+                Job Line: {job_line}
+            """
+                   
         )
         explaination = explaination.strip()
         explainations.append(explaination)
