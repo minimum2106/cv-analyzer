@@ -7,10 +7,16 @@ from cv2 import IMREAD_COLOR, imdecode
 from streamlit_image_coordinates import streamlit_image_coordinates
 from schemas import JobReqInfo, CVLineInfo
 from utils import duplicate_fitz_page
+from extract_doc import (
+    get_lines_with_coords,
+    get_bullets_from_doc,
+    merge_lines_by_bullets,
+    LineWithCoords,
+)
 
 JOB_DOC_MARGIN = 10  # Margin for job description PDF
-DEFAULT_LLM_SERVICE = "openai"  # Default LLM service
-THRESHOLD = 0.7  # You may want to tune this
+DEFAULT_LLM_SERVICE = "groq"  # Default LLM service
+SIMILARITY_THRESHOLD = 0.5  # You may want to tune this
 BACKEND_URL = (
     "http://localhost:8000"  # Adjust this if your backend runs on a different port
 )
@@ -96,7 +102,7 @@ def handle_job_on_click():
 def generate_cv_line_info(filtered_indices, explanations):
     for idx, (cv_idx, job_idx) in enumerate(filtered_indices):
         cv_info = st.session_state.cv_line_info[cv_idx]
-        job_info = st.session_state.job_line_info[job_idx]
+        job_info = st.session_state.job_req_info[job_idx]
 
         job_info.explanation = explanations[idx]
         cv_info.connected_job_reqs.append(job_info)
@@ -124,6 +130,12 @@ def main():
 
     if "job_highlighted" not in st.session_state:
         st.session_state.job_highlighted = []
+
+    if "job_req_info" not in st.session_state:
+        st.session_state.job_req_info = []
+    
+    if "is_job_lines_generated" not in st.session_state:
+        st.session_state.is_job_lines_generated = False
 
     if "highlighed_job_reqs" not in st.session_state:
         st.session_state.highlighed_job_reqs = []
@@ -178,8 +190,8 @@ def main():
     # Right column - Text Input
     with col2:
         st.subheader("✏️ Additional Information")
-        holder = st.empty()  # Placeholder for the text area
-        user_text = holder.text_area(
+        job_description_holder = st.empty()  # Placeholder for the text area
+        user_text = job_description_holder.text_area(
             "Add any additional information:",
             placeholder="Enter job descriptions, specific requirements, career goals, or any other relevant information...",
             height=300,
@@ -191,32 +203,48 @@ def main():
             st.caption(f"Characters: {len(user_text)}")
 
             # summarize and get job requirements by LLM
-            job_requirements = requests.post(
-                f"{BACKEND_URL}/generate_job_requirements",
-                json={"job_description": user_text, "model_type": DEFAULT_LLM_SERVICE},
-            ).json()["job_requirements"]
+            if not st.session_state.is_job_lines_generated:
+                job_requirements = requests.post(
+                    f"{BACKEND_URL}/generate_job_lines",
+                    json={"job_description": user_text, "model_type": DEFAULT_LLM_SERVICE},
+                ).json()["job_lines"]
 
-            doc = fitz.open()
-            doc.new_page()
-            page = doc[0]
-            rect = fitz.Rect(
-                JOB_DOC_MARGIN,
-                JOB_DOC_MARGIN,
-                page.rect.width - JOB_DOC_MARGIN,
-                page.rect.height - JOB_DOC_MARGIN
-            )
-            page.insert_textbox(rect, job_requirements, fontsize=12)
+                doc = fitz.open()
+                doc.new_page()
+                page = doc[0]
+                rect = fitz.Rect(
+                    JOB_DOC_MARGIN,
+                    JOB_DOC_MARGIN,
+                    page.rect.width - JOB_DOC_MARGIN,
+                    page.rect.height - JOB_DOC_MARGIN
+                )
+                page.insert_textbox(rect, job_requirements, fontsize=12)
 
-            pix = page.get_pixmap(dpi=120).tobytes()
-            job_image = imdecode(
-                np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
-            )
+                pix = page.get_pixmap(dpi=120).tobytes()
+                job_image = imdecode(
+                    np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
+                )
 
-            st.session_state.job_page_width = page.mediabox.width
-            st.session_state.job_page_height = page.mediabox.height
+                st.session_state.job_page_width = page.mediabox.width
+                st.session_state.job_page_height = page.mediabox.height
 
-            st.session_state.job_org = duplicate_fitz_page(page)
-            st.session_state.job_highlighted.append(job_image)
+                st.session_state.job_org = duplicate_fitz_page(page)
+                st.session_state.job_highlighted.append(job_image)
+
+                lines_with_coords, fontsize = get_lines_with_coords(doc)
+                bullets = get_bullets_from_doc(doc, fontsize)
+                job_merged_lines = merge_lines_by_bullets(lines_with_coords, bullets)
+
+                for line in job_merged_lines:
+                    st.session_state.job_req_info.append(
+                        JobReqInfo(
+                            position=line.bbox, 
+                            text=line.text,
+                            page=1,
+                        )
+                    )
+                
+                st.session_state.is_job_lines_generated = True
 
             # show doc as image
             _ = streamlit_image_coordinates(
@@ -226,7 +254,7 @@ def main():
                 on_click=handle_job_on_click,
             )
 
-            holder.empty()  # Clear the placeholder after text input
+            job_description_holder.empty()  # Clear the placeholder after text input
 
     # Analysis section
     st.markdown("---")
@@ -254,47 +282,60 @@ def main():
             f"Analyzing with {DEFAULT_LLM_SERVICE}... This may take a moment."
         ):
             doc = fitz.open(stream=uploaded_cv.getvalue(), filetype="pdf")
-            merged_lines = requests.post(
-                f"{BACKEND_URL}/extract_text",
-                json={"doc": doc},
-            ).json()["lines"]
+            lines_with_coords, fontsize = get_lines_with_coords(doc)
+            bullets = get_bullets_from_doc(doc, fontsize)
+            cv_merged_lines = merge_lines_by_bullets(lines_with_coords, bullets)
 
-            for line in merged_lines:
+            for line in cv_merged_lines:
                 st.session_state.cv_line_info.append(
                     CVLineInfo(
                         position=line.bbox,
+                        text=line.text,
+                        page=1,
                     )
                 )
 
             doc = fitz.open()
-            doc.insert_pdf(st.session_state.job_org)
-            job_merged_lines = requests.post(
-                f"{BACKEND_URL}/extract_text",
-                json={"doc": doc},
-            ).json()["lines"]
+            doc.new_page()
+            doc[0].insert_textbox(
+                fitz.Rect(
+                    JOB_DOC_MARGIN,
+                    JOB_DOC_MARGIN,
+                    doc[0].rect.width - JOB_DOC_MARGIN,
+                    doc[0].rect.height - JOB_DOC_MARGIN
+                ),
+                user_text,
+                fontsize=fontsize,
+            )
+            lines_with_coords, fontsize = get_lines_with_coords(doc)
+            bullets = get_bullets_from_doc(doc, fontsize)
+            job_merged_lines = merge_lines_by_bullets(lines_with_coords, bullets)
 
             for line in job_merged_lines:
                 st.session_state.job_req_info.append(
                     JobReqInfo(
-                        position=line.bbox,
+                        position=line.bbox, 
+                        text=line.text,
+                        page=1,
                     )
                 )
 
             similarity_matrix = requests.post(
                 f"{BACKEND_URL}/get_similarity_matrix",
                 json={
-                    "cv_lines": merged_lines.json()["lines"],
-                    "job_lines": job_merged_lines.json()["job_lines"],
+                    "cv_lines": [line.text for line in cv_merged_lines],
+                    "job_lines": [line.text for line in job_merged_lines],
                 },
             ).json()["matrix"]
 
-            filtered_indices = np.argwhere(similarity_matrix > THRESHOLD)
+            filtered_indices = np.argwhere(np.array(similarity_matrix) > SIMILARITY_THRESHOLD)
+            print("Filtered Indices:", len(filtered_indices))
             response = requests.post(
-                f"{BACKEND_URL}/explain_matches",
+                f"{BACKEND_URL}/explain_match",
                 json={
                     "model_type": DEFAULT_LLM_SERVICE,
-                    "cv_lines": merged_lines.json()["lines"],
-                    "job_lines": job_merged_lines.json()["job_lines"],
+                    "cv_lines": [line.text for line in cv_merged_lines],
+                    "job_lines": [line.text for line in job_merged_lines],
                     "filtered_indices": filtered_indices.tolist(),
                 },
             )
