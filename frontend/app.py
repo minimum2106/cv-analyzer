@@ -12,7 +12,7 @@ JOB_DOC_MARGIN = 10  # Margin for job description PDF
 DEFAULT_LLM_SERVICE = "openai"  # Default LLM service
 THRESHOLD = 0.7  # You may want to tune this
 BACKEND_URL = (
-    "http://localhost:5173"  # Adjust this if your backend runs on a different port
+    "http://localhost:8000"  # Adjust this if your backend runs on a different port
 )
 
 # Configure page
