@@ -9,10 +9,9 @@ SIMILARITY_REASONING_PROMPT = f"""
     - Provide 2-3 example pairs (using [placeholder text] for complex variables/tools if necessary) that directly address variables and tools alignment.
 
     # Output Format
-    - Return only the reasoning and conclusion.
+    - Return only the final conclusion in 2 to 3 sentences in a section called <Conclusion> </Conclusion>.
     - Use clear, structured language.
-    - Follow with a short "Conclusion" summarizing their similarity based on variables/tools.
-    - Just use 2 to 3 sentences for both the reasoning and the conclusion.
+    - Remember always have the <Conclusion> section at the end and use <Conclusion> to begin this part and </Conclusion> to end this part. DO NOT USE ANY OTHER MARKUP OR HEADERS TYPE FOR THIS PART.   
 
     # Examples
 

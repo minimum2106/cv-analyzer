@@ -1,27 +1,18 @@
-from fastapi import FastAPI, File, UploadFile, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import pymupdf
-from pymupdf import Document
 from pydantic import BaseModel, BeforeValidator, PlainSerializer
-import openai
 import numpy as np
-import os
 from backend.services import OpenAIService, GroqService, ClaudeService
 from typing import List, Annotated
 import ast
+import re
 
 
 from backend.embeddings import get_openai_embeddings
 from backend.prompts import (
     SIMILARITY_REASONING_PROMPT,
     JOB_REQUIREMENT_EXTRACTING_PROMPT,
-)
-from backend.extract_doc import (
-    get_lines_with_coords,
-    get_bullets_from_doc,
-    merge_lines_by_bullets,
-    LineWithCoords,
 )
 
 app = FastAPI(title="EasyForm Backend API", version="0.1.0")
@@ -34,27 +25,18 @@ app.add_middleware(
 )
 
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
 THRESHOLD = 0.7
-MODELS = {
-    "openai": OpenAIService,
-    "groq": GroqService,
-    "claude": ClaudeService,
-}
-
-# Pydantic models for request/response
 
 
-class PDFTextRequest(BaseModel):
-    model_type: str
-    doc: Document
-
-    class Config:
-        arbitrary_types_allowed = True
-
-
-class PDFTextResponse(BaseModel):
-    lines: list[LineWithCoords]
+def get_llm_service(model_type: str):
+    if model_type == "openai":
+        return OpenAIService()
+    elif model_type == "groq":
+        return GroqService()
+    elif model_type == "claude":
+        return ClaudeService()
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
 
 
 class JobLinesRequest(BaseModel):
@@ -69,6 +51,7 @@ class JobLinesResponse(BaseModel):
 class SimilarityMatrixRequest(BaseModel):
     cv_lines: List[str]
     job_lines: List[str]
+
 
 # https://www.flowphysics.com/2024/02/12/numpy-arrays-in-pydantic.html
 def nd_array_before_validator(x):
@@ -115,25 +98,17 @@ class ExplainMatchRequest(BaseModel):
 
 
 class ExplainMatchResponse(BaseModel):
-    explanation: str
+    explanations: List[str]
 
-
-@app.post("/extract_text", response_model=PDFTextResponse)
-async def extract_cv_text(request: PDFTextRequest):
-    lines_with_coords, fontsize = get_lines_with_coords(request.doc)
-    bullets = get_bullets_from_doc(request.doc, fontsize)
-    merged_lines = merge_lines_by_bullets(lines_with_coords, bullets)
-
-    return PDFTextResponse(cv_lines=merged_lines)
 
 @app.post("/generate_job_lines", response_model=JobLinesResponse)
 async def generate_job_lines(request: JobLinesRequest):
-    llm_service = MODELS.get(request.model_type)
+    llm_service = get_llm_service(request.model_type)
     if not llm_service:
         raise ValueError(f"Unsupported model type: {request.model_type}")
 
     job_lines = llm_service.call_api(
-        system_prompt= JOB_REQUIREMENT_EXTRACTING_PROMPT,
+        system_prompt=JOB_REQUIREMENT_EXTRACTING_PROMPT,
         prompt="This is the job description: \n" + request.job_description,
     )
 
@@ -142,11 +117,18 @@ async def generate_job_lines(request: JobLinesRequest):
 
 @app.post("/get_similarity_matrix", response_model=SimilarityMatrixResponse)
 async def get_similarity_matrix(request: SimilarityMatrixRequest):
-    cv_embeddings = await get_openai_embeddings(request.cv_lines)
-    job_embeddings = get_openai_embeddings(request.job_lines)
+    cv_embeddings = []
+    for line in request.cv_lines:
+        cv_embedding = get_openai_embeddings(line)
+        cv_embeddings.append(cv_embedding)
 
-    job_embeddings = job_embeddings.T  # Transpose for dot product calculation
-    similarity_matrix = np.dot(cv_embeddings, job_embeddings)
+    job_embeddings = []
+    for line in request.job_lines:
+        job_embedding = get_openai_embeddings(line)
+        job_embeddings.append(job_embedding)
+
+    job_embeddings = np.array(job_embeddings).T  # Transpose for dot product calculation
+    similarity_matrix = np.matmul(np.array(cv_embeddings), job_embeddings)
     similarity_matrix = similarity_matrix / (
         np.linalg.norm(cv_embeddings, axis=1)[:, None]
         * np.linalg.norm(job_embeddings, axis=0)
@@ -160,11 +142,11 @@ async def get_similarity_matrix(request: SimilarityMatrixRequest):
 
 @app.post("/explain_match", response_model=ExplainMatchResponse)
 async def explain_match(request: ExplainMatchRequest):
-    llm_service = MODELS.get(request.model_type)
+    llm_service = get_llm_service(request.model_type)
     if not llm_service:
         raise ValueError(f"Unsupported model type: {request.model_type}")
 
-    explainations = []
+    explanations = []
     for indice in request.filtered_indices:
         cv_index, job_index = indice
         if cv_index >= len(request.cv_lines) or job_index >= len(request.job_lines):
@@ -173,16 +155,21 @@ async def explain_match(request: ExplainMatchRequest):
         cv_line = request.cv_lines[cv_index]
         job_line = request.job_lines[job_index]
 
-        explaination = llm_service.call_api(
+        explanation = llm_service.call_api(
             system_prompt=SIMILARITY_REASONING_PROMPT,
             prompt=f"""
                 Explain the similarity between the following CV line and Job line:
                 CV Line: {cv_line}
                 Job Line: {job_line}
-            """
-                   
+            """,
         )
-        explaination = explaination.strip()
-        explainations.append(explaination)
+        explanation = explanation.strip()
+        match = re.search(r"<Conclusion>(.*?)</Conclusion>", explanation, re.DOTALL)
+        if match:
+            conclusion_text = match.group(1).strip()
+        else:
+            conclusion_text = "No conclusion found."
 
-    return JSONResponse(content={"explanations": explainations})
+        explanations.append(conclusion_text)
+
+    return JSONResponse(content={"explanations": explanations})

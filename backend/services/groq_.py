@@ -3,9 +3,11 @@ from groq import Groq
 import os
 import logging
 import textwrap
+from dotenv import load_dotenv
 
-DEFAULT_GROQ_MODEL = "groq-llama2-7b-chat"
+load_dotenv()
 
+DEFAULT_GROQ_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct"
 
 class GroqService(LLMService):
     def __init__(self, model=DEFAULT_GROQ_MODEL, api_key=None):

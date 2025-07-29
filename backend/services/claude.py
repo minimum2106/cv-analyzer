@@ -2,6 +2,9 @@ from backend.services.general import LLMService
 import anthropic
 import logging
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DEFAULT_CLAUDE_MODEL = "claude-2"
 
