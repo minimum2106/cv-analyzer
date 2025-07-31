@@ -17,7 +17,7 @@ from extract_doc import (
 
 JOB_DOC_MARGIN = 10  # Margin for job description PDF
 DEFAULT_LLM_SERVICE = "groq"  # Default LLM service
-SIMILARITY_THRESHOLD = 0.5  # You may want to tune this
+SIMILARITY_THRESHOLD = 0.42  # You may want to tune this
 BACKEND_URL = (
     "http://localhost:8000"  # Adjust this if your backend runs on a different port
 )
@@ -52,7 +52,7 @@ def handle_cv_click():
 
             # Update The CV Image
             page = duplicate_fitz_page(st.session_state.cv_org)
-            page.add_rect_annot(line_info.position)  # Add annotation to the first block
+            page.add_highlight_annot(line_info.position)  # Add annotation to the first block
             pix = page.get_pixmap(dpi=120).tobytes()
             cv2_image = imdecode(
                 np.frombuffer(bytearray(pix), dtype=np.uint8), IMREAD_COLOR
@@ -64,7 +64,7 @@ def handle_cv_click():
             job_page = duplicate_fitz_page(st.session_state.job_org)
             st.session_state.highlighed_job_reqs = []
             for job_req in line_info.connected_job_reqs:
-                job_page.add_rect_annot(
+                job_page.add_highlight_annot(
                     job_req.position
                 )  # Add annotation to the first block
                 st.session_state.highlighed_job_reqs.append(job_req)
@@ -101,6 +101,9 @@ def handle_job_on_click():
 
 
 def process_job_description_change():
+    # empty the job_req_info
+    st.session_state.job_req_info = []
+    
     job_requirements = requests.post(
         f"{BACKEND_URL}/generate_job_lines",
         json={
@@ -145,6 +148,7 @@ def process_job_description_change():
 
 def process_uploaded_cv_change():
     uploaded_cv = st.session_state.uploaded_cv
+    st.session_state.cv_line_info = []
 
     if uploaded_cv is None:
         return
@@ -261,6 +265,7 @@ def main():
                 on_click=handle_job_on_click,
             )
 
+            job_description_holder.empty()  # Clear the placeholder after text input
 
     # Analysis section
     st.markdown("---")
@@ -337,7 +342,6 @@ def main():
             filtered_indices = np.argwhere(
                 np.array(similarity_matrix) > SIMILARITY_THRESHOLD
             )
-            print("Filtered Indices:", len(filtered_indices))
             response = requests.post(
                 f"{BACKEND_URL}/explain_match",
                 json={
