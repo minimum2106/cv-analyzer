@@ -168,12 +168,14 @@ def process_uploaded_cv_change():
         st.session_state.cv_highlighted.append(cv2_image)
 
 
-def generate_cv_line_info(filtered_indices, explanations):
+def generate_cv_line_info(filtered_indices, explanations=[]):
     for idx, (cv_idx, job_idx) in enumerate(filtered_indices):
         cv_info = st.session_state.cv_line_info[cv_idx]
         job_info = st.session_state.job_req_info[job_idx]
 
-        job_info.explanation = explanations[idx]
+        if explanations:
+            job_info.explanation = explanations[idx]
+
         cv_info.connected_job_reqs.append(job_info)
 
 
@@ -342,19 +344,19 @@ def main():
             filtered_indices = np.argwhere(
                 np.array(similarity_matrix) > SIMILARITY_THRESHOLD
             )
-            response = requests.post(
-                f"{BACKEND_URL}/explain_match",
-                json={
-                    "model_type": DEFAULT_LLM_SERVICE,
-                    "cv_lines": [line.text for line in cv_merged_lines],
-                    "job_lines": [line.text for line in job_merged_lines],
-                    "filtered_indices": filtered_indices.tolist(),
-                },
-            )
-            explanations = response.json()["explanations"]
+            # response = requests.post(
+            #     f"{BACKEND_URL}/explain_match",
+            #     json={
+            #         "model_type": DEFAULT_LLM_SERVICE,
+            #         "cv_lines": [line.text for line in cv_merged_lines],
+            #         "job_lines": [line.text for line in job_merged_lines],
+            #         "filtered_indices": filtered_indices.tolist(),
+            #     },
+            # )
+            # explanations = response.json()["explanations"]
 
-            # add connections between cv line and job requirements
-            generate_cv_line_info(filtered_indices, explanations)
+            # # add connections between cv line and job requirements
+            generate_cv_line_info(filtered_indices)
 
     # Footer
     st.markdown("---")
