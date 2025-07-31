@@ -85,23 +85,22 @@ def merge_lines_by_bullets(
                     # If this is the first line in the group, set bullet_fontsize
                     if bullet_fontsize is None:
                         bullet_fontsize = line.fontsize
+
                     # If this is not the first line in the group, check the gap and font size
                     if last_line_y1 is not None and normal_gap > 0:
                         gap = line_y0 - last_line_y1
                         if gap > line_gap_factor * normal_gap:
                             # Large gap, stop merging for this bullet
                             break
-                    if (
-                        bullet_fontsize is not None
-                        and "fontsize" in line
-                        and line.fontsize != bullet_fontsize
-                    ):
+
+                    if bullet_fontsize is not None and line.fontsize != bullet_fontsize:
                         # Font size changed, stop merging for this bullet
                         break
 
                     group_lines.append(line)
                     used.add(idx)
                     x0, y0, x1, y1 = line.bbox
+
                     if group_bbox is None:
                         group_bbox = [x0, y0, x1, y1]
                     else:
@@ -110,8 +109,10 @@ def merge_lines_by_bullets(
                         group_bbox[2] = max(group_bbox[2], x1)
                         group_bbox[3] = max(group_bbox[3], y1)
                     last_line_y1 = line_y1
+
                 else:
                     continue
+                
             if group_lines:
                 merged_text = " ".join([l.text for l in group_lines])
                 merged.append(
