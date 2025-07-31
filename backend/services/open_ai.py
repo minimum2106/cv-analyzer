@@ -1,9 +1,11 @@
-from backend.services.general import LLMService
-from openai import OpenAI
-import tiktoken
+from dotenv import load_dotenv
 import logging
 import os
-from dotenv import load_dotenv
+
+from openai import OpenAI
+import tiktoken
+
+from backend.services.general import LLMService
 
 load_dotenv()
 

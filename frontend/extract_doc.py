@@ -1,6 +1,7 @@
+from typing import List, Tuple
+
 import numpy as np
 from pydantic import BaseModel
-from typing import List, Tuple
 from pymupdf import Rect, Document
 
 

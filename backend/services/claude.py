@@ -1,8 +1,10 @@
-from backend.services.general import LLMService
-import anthropic
+from dotenv import load_dotenv
 import logging
 import os
-from dotenv import load_dotenv
+
+import anthropic
+
+from backend.services.general import LLMService
 
 load_dotenv()
 

@@ -1,6 +1,7 @@
-import uvicorn
 import sys
 import os
+
+import uvicorn
 
 # Add the directory containing the back package to Python path for PyInstaller
 if getattr(sys, 'frozen', False):

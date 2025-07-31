@@ -1,9 +1,10 @@
-from backend.services.general import LLMService
-from groq import Groq
-import os
-import logging
-import textwrap
 from dotenv import load_dotenv
+import logging
+import os
+
+from groq import Groq
+
+from backend.services.general import LLMService
 
 load_dotenv()
 

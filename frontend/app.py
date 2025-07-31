@@ -1,9 +1,10 @@
-import streamlit as st
-import numpy as np
-import fitz
 import requests
 
 from cv2 import IMREAD_COLOR, imdecode
+import streamlit as st
+import numpy as np
+import fitz
+
 from streamlit_image_coordinates import streamlit_image_coordinates
 from schemas import JobReqInfo, CVLineInfo
 from utils import duplicate_fitz_page
