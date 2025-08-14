@@ -4,6 +4,12 @@ CV Analyzer is a Streamlit-based web application that allows users to upload the
 
 ---
 
+## Demo
+<video controls>
+  <source src="assets/demo.mov" type="video/mp4">
+</video>
+
+
 ## Features
 
 - **Upload CVs**: Upload your CV in PDF format for analysis.
